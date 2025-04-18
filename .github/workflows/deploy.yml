@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 env:
-  DOCKER_HUB_REPO: your-dockerhub-username/supplier-service
+  DOCKER_HUB_REPO: sashi20014/supplier-service
   AWS_EC2_HOST: ${{ secrets.AWS_EC2_PUBLIC_IP }}
   AWS_EC2_SSH_KEY: ${{ secrets.AWS_EC2_SSH_PRIVATE_KEY }}
   SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
