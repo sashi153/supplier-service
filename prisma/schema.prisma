@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  contactNumber String
+  role          String
+  password      String
+  username      String   @unique
+  email         String   @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  Order         Order[]
+  points        Points?  @relation("UserPoints")
+}
+
+model Points {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], name: "UserPoints")
+  balance   Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Coupon {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  couponCode       String   @unique
+  discountedAmount Float
+  activeStatus     Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relation to the join table
+  allowedItems CouponInventoryItem[]
+}
+
+model Order {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId        String   @db.ObjectId
+  user          User     @relation(fields: [userId], references: [id])
+  totalBill     Float
+  discount      Float    @default(0)
+  address       String
+  name          String
+  email         String
+  contactNumber String
+  couponCode    String?
+  deleteStatus  Boolean  @default(false)
+  orderStatus   String   @default("Pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relation to OrderItems (Join Table)
+  orderedItems OrderInventoryItem[]
+}
+
+model InventoryItem {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  price        Float
+  description  String
+  imageUrl     String
+  inStock      Int
+  deleteStatus Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relation to Coupons and Orders (Join Tables)
+  coupons CouponInventoryItem[]
+  orders  OrderInventoryItem[]
+}
+
+model CouponInventoryItem {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  couponId    String @db.ObjectId
+  inventoryId String @db.ObjectId
+
+  // Define relations
+  coupon    Coupon        @relation(fields: [couponId], references: [id])
+  inventory InventoryItem @relation(fields: [inventoryId], references: [id])
+
+  // Ensure unique coupon-item pair
+  @@unique([couponId, inventoryId])
+}
+
+model OrderInventoryItem {
+  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  orderId     String @db.ObjectId
+  inventoryId String @db.ObjectId
+  quantity    Int
+
+  // Define relations
+  order     Order         @relation(fields: [orderId], references: [id])
+  inventory InventoryItem @relation(fields: [inventoryId], references: [id])
+
+  // Ensure unique order-item pair
+  @@unique([orderId, inventoryId])
+}
+
+model Supplier {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  email         String   @unique
+  contactNumber String
+  address       String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
