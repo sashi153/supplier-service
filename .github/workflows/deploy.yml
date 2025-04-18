@@ -44,7 +44,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           args: >
-            -Dsonar.organization=your-sonarcloud-org
+            -Dsonar.organization=sashi153
             -Dsonar.projectKey=supplier-service
             -Dsonar.javascript.node.version=18
 
