@@ -81,16 +81,29 @@ jobs:
         run: |
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ secrets.AWS_EC2_PUBLIC_IP }} << 'EOF'
           # Pull the new image
-          docker pull $DOCKER_HUB_REPO:${{ github.sha }}
+          docker pull $DOCKER_HUB_REPO:${{ github.sha }} || true
 
-          # Stop and remove old container
-          docker stop supplier-service || true
-          docker rm supplier-service || true
-
-          # Run new container
-          docker run -d \
+          if docker inspect supplier-service >/dev/null 2>&1; then
+            docker stop supplier-service || true
+            docker rm supplier-service || true
+            fi
+            
+          # Run new container with proper error handling
+          if ! docker run -d \
             --name supplier-service \
             -p 5003:5003 \
             -e DATABASE_URL="$DATABASE_URL" \
-            $DOCKER_HUB_REPO:${{ github.sha }}
-          EOF
+            $DOCKER_HUB_REPO:${{ github.sha }}; then
+            
+            echo "Failed to start container. Trying to pull image again..."
+            docker pull $DOCKER_HUB_REPO:${{ github.sha }}
+            docker run -d \
+                --name supplier-service \
+                -p 5003:5003 \
+                -e DATABASE_URL="$DATABASE_URL" \
+                $DOCKER_HUB_REPO:${{ github.sha }}
+            fi
+            
+            # Verify container is running
+            docker ps -f name=supplier-service
+            EOF
