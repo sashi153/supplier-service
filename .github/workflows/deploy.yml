@@ -67,25 +67,30 @@ jobs:
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-          echo "$AWS_EC2_SSH_KEY" > ~/.ssh/ec2_key
+          # Properly format the private key with newlines
+          echo "${{ secrets.AWS_EC2_SSH_PRIVATE_KEY }}" | sed 's/\\n/\n/g' > ~/.ssh/ec2_key
           chmod 600 ~/.ssh/ec2_key
-          echo "$AWS_EC2_HOST ssh-ed25519 AAAAC3..." >> ~/.ssh/known_hosts
 
-      # Deploy to EC2 via SSH
+          # Add EC2 to known_hosts
+          ssh-keyscan ${{ secrets.AWS_EC2_PUBLIC_IP }} >> ~/.ssh/known_hosts
+
+          # Verify SSH connection works
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ secrets.AWS_EC2_PUBLIC_IP }} "echo 'SSH successful!'"
+
       - name: Deploy to EC2
         run: |
-          # Add EC2 to known_hosts
-          mkdir -p ~/.ssh
-          ssh-keyscan $AWS_EC2_HOST >> ~/.ssh/known_hosts
-
-          # Deploy commands
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@$AWS_EC2_HOST << 'EOF'
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ubuntu@${{ secrets.AWS_EC2_PUBLIC_IP }} << 'EOF'
+          # Pull the new image
           docker pull $DOCKER_HUB_REPO:${{ github.sha }}
+
+          # Stop and remove old container
           docker stop supplier-service || true
           docker rm supplier-service || true
+
+          # Run new container
           docker run -d \
-              --name supplier-service \
-              -p 5003:5003 \
-              -e DATABASE_URL="$DATABASE_URL" \
-              $DOCKER_HUB_REPO:${{ github.sha }}
+            --name supplier-service \
+            -p 5003:5003 \
+            -e DATABASE_URL="$DATABASE_URL" \
+            $DOCKER_HUB_REPO:${{ github.sha }}
           EOF
