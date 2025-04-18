@@ -74,18 +74,18 @@ jobs:
       # Deploy to EC2 via SSH
       - name: Deploy to EC2
         run: |
-          ssh -i ~/.ssh/ec2_key ec2-user@$AWS_EC2_HOST << 'EOF'
-          # Pull the new image
-          docker pull $DOCKER_HUB_REPO:${{ github.sha }}
+          # Add EC2 to known_hosts
+          mkdir -p ~/.ssh
+          ssh-keyscan $AWS_EC2_HOST >> ~/.ssh/known_hosts
 
-          # Stop and remove old container
+          # Deploy commands
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/ec2_key ec2-user@$AWS_EC2_HOST << 'EOF'
+          docker pull $DOCKER_HUB_REPO:${{ github.sha }}
           docker stop supplier-service || true
           docker rm supplier-service || true
-
-          # Run new container
           docker run -d \
-            --name supplier-service \
-            -p 5003:5003 \
-            -e DATABASE_URL=$DATABASE_URL \
-            $DOCKER_HUB_REPO:${{ github.sha }}
+              --name supplier-service \
+              -p 5003:5003 \
+              -e DATABASE_URL="$DATABASE_URL" \
+              $DOCKER_HUB_REPO:${{ github.sha }}
           EOF
