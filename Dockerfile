@@ -20,11 +20,11 @@ RUN npx prisma generate
 # Copy source files
 COPY . .
 
-# Build the application (added --outDir as a precaution)
-RUN npm run build || tsc --outDir dist
+# Build the application
+RUN npm run build
 
-# Debug: List all files after build to see what's there
-RUN find . -type f | grep -v "node_modules" | sort
+# Verify the build output exists
+RUN ls -la dist || (echo "Build failed: dist directory not found" && exit 1)
 
 # Stage 2: Run
 FROM node:22-alpine
@@ -36,7 +36,7 @@ RUN apk add --no-cache openssl
 # Copy production files from builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/dist ./dist || echo "Warning: dist directory not found, attempting to continue"
+COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 
 # Security hardening
