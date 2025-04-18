@@ -5,18 +5,26 @@ WORKDIR /app
 # Install dependencies (including Prisma system requirements)
 RUN apk add --no-cache openssl
 
-# Copy dependency files first for better layer caching
+# Copy package files first
 COPY package*.json ./
+
+# Copy prisma schema
 COPY prisma ./prisma
 
-# Install dependencies (clean cache afterward)
-RUN npm ci --omit=dev && \
-    npx prisma generate && \
-    npm cache clean --force
+# Install all dependencies (including dev dependencies needed for build)
+RUN npm ci
 
-# Copy and build application
+# Generate Prisma client
+RUN npx prisma generate
+
+# Copy application code
 COPY . .
+
+# Build the application
 RUN npm run build
+
+# Verify dist directory exists before moving on
+RUN ls -la dist || (echo "Build failed: dist directory not found" && exit 1)
 
 # Stage 2: Run
 FROM node:22-alpine
