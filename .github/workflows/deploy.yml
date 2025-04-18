@@ -1,0 +1,90 @@
+name: Build, Test, Deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  DOCKER_HUB_REPO: your-dockerhub-username/supplier-service
+  AWS_EC2_HOST: ${{ secrets.AWS_EC2_PUBLIC_IP }}
+  AWS_EC2_SSH_KEY: ${{ secrets.AWS_EC2_SSH_PRIVATE_KEY }}
+  SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}
+
+jobs:
+  build-test-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Setup Java (required for SonarCloud)
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: "17"
+
+      # Setup Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+
+      # Install dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Run unit tests
+      - name: Run unit tests
+        run: npm test
+
+      # SonarCloud analysis
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: >
+            -Dsonar.organization=your-sonarcloud-org
+            -Dsonar.projectKey=supplier-service
+            -Dsonar.javascript.node.version=18
+
+      # Build Docker image
+      - name: Build Docker image
+        run: docker build -t $DOCKER_HUB_REPO:${{ github.sha }} .
+
+      # Login to Docker Hub
+      - name: Login to Docker Hub
+        run: echo "${{ secrets.DOCKER_HUB_TOKEN }}" | docker login -u ${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
+
+      # Push to Docker Hub
+      - name: Push to Docker Hub
+        run: docker push $DOCKER_HUB_REPO:${{ github.sha }}
+
+  deploy-to-ec2:
+    needs: build-test-scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "$AWS_EC2_SSH_KEY" > ~/.ssh/ec2_key
+          chmod 600 ~/.ssh/ec2_key
+          echo "$AWS_EC2_HOST ssh-ed25519 AAAAC3..." >> ~/.ssh/known_hosts
+
+      # Deploy to EC2 via SSH
+      - name: Deploy to EC2
+        run: |
+          ssh -i ~/.ssh/ec2_key ec2-user@$AWS_EC2_HOST << 'EOF'
+          # Pull the new image
+          docker pull $DOCKER_HUB_REPO:${{ github.sha }}
+
+          # Stop and remove old container
+          docker stop supplier-service || true
+          docker rm supplier-service || true
+
+          # Run new container
+          docker run -d \
+            --name supplier-service \
+            -p 5003:5003 \
+            -e DATABASE_URL=$DATABASE_URL \
+            $DOCKER_HUB_REPO:${{ github.sha }}
+          EOF
